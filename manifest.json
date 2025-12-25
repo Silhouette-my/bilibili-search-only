@@ -1,28 +1,28 @@
 {
   "manifest_version": 3,
   "name": "Bilibili 屏蔽插件合集",
-  "version": "2.2",
-  "description": "屏蔽 Bilibili 播放页和搜索页的多余元素，带控制面板开关。",
+  "version": "2.4",
+  "description": "屏蔽 Bilibili 播放页和搜索页的多余元素",
   "permissions": ["storage", "scripting", "tabs"],
   "host_permissions": ["*://www.bilibili.com/*"],
   "content_scripts": [
     {
       "matches": ["*://www.bilibili.com/video/*"],
-      "js": ["mask.js"],
+      "js": ["playerOverlay.js"],
       "run_at": "document_idle"
     },
     {
       "matches": ["*://search.bilibili.com/*"],
-      "js": ["content.js"],
-      "css": ["style.css"],
+      "js": ["searchOverlay.js"],
+      "css": ["searchOverlay.css"],
       "run_at": "document_idle"
     }
   ],
   "action": {
-    "default_popup": "popup.html",
-    "default_icon": "icon.png"
+    "default_popup": "controlPanel.html",
+    "default_icon": "extensionIcon.png"
   },
   "icons": {
-    "128": "icon.png"
+    "128": "extensionIcon.png"
   }
 }
