@@ -1,11 +1,11 @@
 chrome.storage.sync.get('playerMaskEnabled', (data) => {
   if (data.playerMaskEnabled === false) {
     console.log("播放页遮罩已关闭");
-    // 恢复滚动（关闭时）
-    document.body.style.overflow = '';
-    document.documentElement.style.overflow = '';
+    disableScrollLock(); // 关闭时恢复滚动
     return;
   }
+
+  enableScrollLock(); // 启用时锁定滚动
 
   (function () {
     // ====== Styles ======
@@ -16,7 +16,7 @@ chrome.storage.sync.get('playerMaskEnabled', (data) => {
         z-index: 999999;
         background: rgba(0,0,0,0.22);
         backdrop-filter: grayscale(70%) contrast(80%) brightness(99%);
-        pointer-events: auto;
+        pointer-events: auto; /* 拦截交互 */
       }
       .bili-corner {
         position: fixed;
@@ -24,7 +24,7 @@ chrome.storage.sync.get('playerMaskEnabled', (data) => {
         width: 12px; height: 12px;
         background: rgba(0,0,0,0.22);
         backdrop-filter: grayscale(70%) contrast(80%) brightness(99%);
-        pointer-events: none;
+        pointer-events: none; /* 不拦截，开孔保持可点击 */
       }
       .corner-tl { 
         -webkit-mask: radial-gradient(circle at 100% 100%, #000 0px, #000 100%, transparent 100%);
@@ -77,21 +77,6 @@ chrome.storage.sync.get('playerMaskEnabled', (data) => {
     document.body.appendChild(cornerBL);
     document.body.appendChild(cornerBR);
     document.body.appendChild(ring);
-
-    // 拦截遮罩区域交互（条带）
-    const block = e => { e.stopPropagation(); e.preventDefault(); };
-    ['click','mousedown','mouseup','dblclick','contextmenu','wheel','touchstart','touchmove','touchend','pointerdown','pointerup']
-      .forEach(evt => {
-        [topStrip, bottomStrip, leftStrip, rightStrip]
-          .forEach(el => el.addEventListener(evt, block, { passive: false }));
-      });
-
-    // ====== 禁用翻页 ======
-    function disableScroll() {
-      document.body.style.overflow = 'hidden';
-      document.documentElement.style.overflow = 'hidden';
-    }
-    disableScroll();
 
     // ====== Layout constants ======
     const GAP = 12;
@@ -194,3 +179,26 @@ chrome.storage.sync.get('playerMaskEnabled', (data) => {
     mo.observe(document.body, { childList: true, subtree: true });
   })();
 });
+
+/* ====== 网页级滚动锁定，不影响点击/快捷键 ====== */
+function enableScrollLock() {
+  document.body.style.overflow = 'hidden';
+  document.documentElement.style.overflow = 'hidden';
+
+  const blockScroll = e => e.preventDefault();
+  window.addEventListener('wheel', blockScroll, { passive: false });
+  window.addEventListener('touchmove', blockScroll, { passive: false });
+
+  window.__biliBlockScroll = blockScroll;
+}
+
+function disableScrollLock() {
+  document.body.style.overflow = '';
+  document.documentElement.style.overflow = '';
+
+  if (window.__biliBlockScroll) {
+    window.removeEventListener('wheel', window.__biliBlockScroll, { passive: false });
+    window.removeEventListener('touchmove', window.__biliBlockScroll, { passive: false });
+    window.__biliBlockScroll = null;
+  }
+}
