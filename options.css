@@ -144,11 +144,32 @@ select {
   gap: 16px;
 }
 
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.lock-feature-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .theme-option {
   display: block;
 }
 
+.check-card {
+  position: relative;
+  display: block;
+}
+
 .theme-option input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.check-card input {
   position: absolute;
   opacity: 0;
   pointer-events: none;
@@ -172,8 +193,24 @@ select {
   transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
 }
 
+.check-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 148px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+
 .theme-card:hover,
-.window-item:hover {
+.window-item:hover,
+.check-card-copy:hover {
   transform: translateY(-1px);
   box-shadow: var(--shadow);
 }
@@ -184,7 +221,19 @@ select {
   box-shadow: 0 18px 42px var(--accent-glow);
 }
 
+.check-card input:checked + .check-card-copy {
+  border-color: rgba(251, 114, 153, 0.32);
+  background: var(--surface-strong);
+  box-shadow: 0 18px 42px var(--accent-glow);
+}
+
+.check-card input:disabled + .check-card-copy {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
 .theme-option input:focus-visible + .theme-card,
+.check-card input:focus-visible + .check-card-copy,
 .switch-control input:focus-visible + .switch-track,
 .field input:focus-visible,
 .field select:focus-visible,
@@ -271,9 +320,20 @@ select {
   line-height: 1.3;
 }
 
+.check-card-copy strong {
+  font-size: 16px;
+  line-height: 1.3;
+}
+
 .theme-copy span {
   font-size: 13px;
   line-height: 1.5;
+}
+
+.check-card-copy span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .switch-row {
@@ -427,6 +487,81 @@ select {
   background: var(--surface-soft);
 }
 
+.shortcut-help,
+.shortcut-recording-hint {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.shortcut-help {
+  margin: 0 0 14px;
+}
+
+.shortcut-recording-hint {
+  min-height: 21px;
+  margin: 12px 0 0;
+  color: var(--accent-strong);
+}
+
+.shortcut-binding-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.shortcut-binding-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--card-shadow);
+}
+
+.shortcut-action-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 5px;
+}
+
+.shortcut-action-copy strong {
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.shortcut-binding-value {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut-row-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.shortcut-row-actions button {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.shortcut-record-button.is-recording {
+  border-color: rgba(251, 114, 153, 0.5);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  box-shadow: 0 8px 20px var(--accent-glow);
+}
+
 .save-hint {
   margin: 0;
   min-height: 20px;
@@ -460,8 +595,15 @@ select:disabled {
   }
 
   .theme-options,
-  .field-grid {
+  .check-grid,
+  .field-grid,
+  .shortcut-binding-list {
     grid-template-columns: 1fr;
+  }
+
+  .shortcut-binding-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .window-item {

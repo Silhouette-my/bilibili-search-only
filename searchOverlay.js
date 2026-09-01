@@ -1,123 +1,223 @@
+const bfSearchBackgroundClient = globalThis.BiliFocusClient;
+
 const bfSearchController = {
   active: false,
   observer: null,
+  observerMode: 'none',
+  resizeObserver: null,
+  root: null,
+  input: null,
   scrollHandler: null,
   resizeHandler: null,
-  maskHideTimer: null
+  maskHideTimer: null,
+  maskShowFrameId: null,
+  updateFrameId: null,
+  layoutRequested: false,
+  mask: null
 };
 
+let bfSearchPageSuspended = false;
+let bfLatestSearchFeatureState = {};
+let bfSearchStateRequestId = 0;
+let bfSearchUnsubscribe = null;
+let bfSearchLifecycleGeneration = 0;
+
 const BF_HEADER_HEIGHT = 64;
-const BF_LEFT_MASK_WIDTH = 240;
-const BF_Z_MASK = 999998;
-const BF_Z_FLOAT = 100000;
 const BF_SHOW_THRESHOLD = 12;
 const BF_ACTIVE_CLASS = 'bili-search-mask-active';
+const BF_ENTRY_CLASS = 'bili-search-page-entry';
+const BF_RESULTS_CLASS = 'bili-search-page-results';
 
 function bfDetectSearchPageType() {
-  const isEntry = !!document.querySelector('.search-entry-page');
-  const isResults = !isEntry && !!document.querySelector('.search-layout');
-  document.documentElement.classList.toggle('is-entry', bfSearchController.active && isEntry);
-  document.documentElement.classList.toggle('is-results', bfSearchController.active && isResults);
+  const root = bfSearchController.root && bfSearchController.root.isConnected
+    ? bfSearchController.root
+    : null;
+  const isEntry = Boolean(root && root.classList.contains('search-entry-page'));
+  const isResults = Boolean(root && !isEntry && root.classList.contains('search-layout'));
+  document.documentElement.classList.toggle(BF_ENTRY_CLASS, bfSearchController.active && isEntry);
+  document.documentElement.classList.toggle(BF_RESULTS_CLASS, bfSearchController.active && isResults);
   return { isEntry, isResults };
 }
 
+function bfQuerySearchTarget() {
+  const entryRoot = document.querySelector('.search-entry-page');
+  const root = entryRoot || document.querySelector('.search-layout');
+  const input = root?.querySelector('.search-input-wrap') ||
+    document.querySelector('.search-input-wrap');
+  return root && input ? { root, input } : null;
+}
+
+function bfDisconnectSearchObservers() {
+  if (bfSearchController.observer) {
+    bfSearchController.observer.disconnect();
+    bfSearchController.observer = null;
+  }
+  if (bfSearchController.resizeObserver) {
+    bfSearchController.resizeObserver.disconnect();
+    bfSearchController.resizeObserver = null;
+  }
+  bfSearchController.observerMode = 'none';
+}
+
+function bfObserveSearchAncestorChildLists(observer, node, observedTargets = new Set()) {
+  let current = node;
+  while (current && current.parentNode) {
+    const parent = current.parentNode;
+    if (!observedTargets.has(parent)) {
+      observer.observe(parent, { childList: true });
+      observedTargets.add(parent);
+    }
+    current = parent;
+  }
+}
+
+function bfObserveSearchTarget(target) {
+  bfDisconnectSearchObservers();
+  bfSearchController.root = target && target.root.isConnected ? target.root : null;
+  bfSearchController.input = target && target.input.isConnected ? target.input : null;
+
+  if (!bfSearchController.active || !document.body) return;
+
+  if (!bfSearchController.root || !bfSearchController.input) {
+    bfSearchController.root = null;
+    bfSearchController.input = null;
+    bfSearchController.observerMode = 'discovery';
+    bfSearchController.observer = new MutationObserver(() => {
+      if (!bfSearchController.active) return;
+      bfSyncSearchTarget(true);
+      bfScheduleSearchUpdate(true);
+    });
+    bfSearchController.observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    if (document.documentElement !== document.body) {
+      bfSearchController.observer.observe(document.documentElement, { childList: true });
+    }
+    return;
+  }
+
+  const currentRoot = bfSearchController.root;
+  const currentInput = bfSearchController.input;
+  const resizeObserverAvailable = typeof ResizeObserver === 'function';
+  bfSearchController.observerMode = 'target';
+  bfSearchController.observer = new MutationObserver(() => {
+    if (!bfSearchController.active) return;
+    bfSyncSearchTarget(true);
+    bfScheduleSearchUpdate(true);
+  });
+  const observedTargets = new Set([currentRoot]);
+  bfSearchController.observer.observe(currentRoot, resizeObserverAvailable
+    ? {
+      childList: true,
+      attributes: true,
+      attributeFilter: ['class', 'style']
+    }
+    : {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style']
+    });
+
+  if (currentInput !== currentRoot) {
+    bfSearchController.observer.observe(currentInput, resizeObserverAvailable
+      ? {
+        attributes: true,
+        attributeFilter: ['class', 'style']
+      }
+      : {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['class', 'style']
+      });
+    observedTargets.add(currentInput);
+  }
+  bfObserveSearchAncestorChildLists(
+    bfSearchController.observer,
+    currentRoot,
+    observedTargets
+  );
+  bfObserveSearchAncestorChildLists(
+    bfSearchController.observer,
+    currentInput,
+    observedTargets
+  );
+
+  if (resizeObserverAvailable) {
+    bfSearchController.resizeObserver = new ResizeObserver(() => {
+      if (!bfSearchController.active) return;
+      if (!currentRoot.isConnected || !currentInput.isConnected) {
+        bfSyncSearchTarget(true);
+        bfScheduleSearchUpdate(true);
+        return;
+      }
+      bfScheduleSearchUpdate(false);
+    });
+    bfSearchController.resizeObserver.observe(currentInput);
+  }
+}
+
+function bfSyncSearchTarget(force = false) {
+  if (
+    !force &&
+    bfSearchController.root &&
+    bfSearchController.root.isConnected &&
+    bfSearchController.input &&
+    bfSearchController.input.isConnected
+  ) {
+    return {
+      root: bfSearchController.root,
+      input: bfSearchController.input
+    };
+  }
+
+  const nextTarget = bfQuerySearchTarget();
+  if (
+    nextTarget &&
+    nextTarget.root === bfSearchController.root &&
+    nextTarget.input === bfSearchController.input
+  ) {
+    return nextTarget;
+  }
+
+  bfObserveSearchTarget(nextTarget);
+  return nextTarget;
+}
+
 function bfEnsureLeftMask() {
-  let mask = document.querySelector('#bili-header-mask-left');
+  let mask = bfSearchController.mask;
+  if (mask && mask.isConnected) return mask;
+
+  mask = document.querySelector('#bili-header-mask-left');
   if (!mask) {
     mask = document.createElement('div');
     mask.id = 'bili-header-mask-left';
     document.body.appendChild(mask);
   }
 
-  Object.assign(mask.style, {
-    position: 'fixed',
-    top: '0',
-    left: '0',
-    width: `${BF_LEFT_MASK_WIDTH}px`,
-    height: `${BF_HEADER_HEIGHT}px`,
-    background: '#fff',
-    zIndex: BF_Z_MASK,
-    pointerEvents: 'auto',
-    display: 'none',
-    opacity: '0',
-    transition: 'opacity 120ms ease'
-  });
-
+  bfSearchController.mask = mask;
   return mask;
 }
 
 function bfRemoveLeftMask() {
-  const mask = document.querySelector('#bili-header-mask-left');
+  const mask = bfSearchController.mask || document.querySelector('#bili-header-mask-left');
   if (mask) {
     mask.remove();
   }
+  bfSearchController.mask = null;
 }
 
-function bfFloatSearchElements() {
-  ['.search-input-wrap', '.search-center-title', '.search-logo'].forEach((selector) => {
-    const element = document.querySelector(selector);
-    if (element) {
-      element.style.position = 'relative';
-      element.style.zIndex = BF_Z_FLOAT;
-      element.style.pointerEvents = 'auto';
-    }
-  });
-}
-
-function bfRestoreSearchElements() {
-  ['.search-input-wrap', '.search-center-title', '.search-logo'].forEach((selector) => {
-    const element = document.querySelector(selector);
-    if (element) {
-      element.style.position = '';
-      element.style.zIndex = '';
-      element.style.pointerEvents = '';
-    }
-  });
-
-  const title = document.querySelector('.search-center-title');
-  if (title) {
-    title.style.marginTop = '';
-    title.style.marginBottom = '';
-  }
-
-  const stage = document.querySelector('#i_cecream');
-  if (stage) {
-    stage.style.minHeight = '';
-  }
-}
-
-function bfAdjustEntryPage() {
-  const stage = document.querySelector('#i_cecream');
-  if (stage) stage.style.minHeight = '100vh';
-
-  const title = document.querySelector('.search-center-title');
-  if (title) {
-    title.style.marginTop = '0';
-    title.style.marginBottom = '16px';
-    title.style.position = 'relative';
-    title.style.zIndex = BF_Z_FLOAT;
-  }
-}
-
-function bfResetEntryAdjustments() {
-  const stage = document.querySelector('#i_cecream');
-  if (stage) stage.style.minHeight = '';
-
-  const title = document.querySelector('.search-center-title');
-  if (title) {
-    title.style.marginTop = '';
-    title.style.marginBottom = '';
-  }
-}
-
-function bfUpdateMaskVisibility() {
-  const mask = document.querySelector('#bili-header-mask-left');
+function bfUpdateMaskVisibility(pageType = null) {
+  const mask = bfSearchController.mask || document.querySelector('#bili-header-mask-left');
   if (!mask || !bfSearchController.active) return;
 
-  const { isEntry, isResults } = bfDetectSearchPageType();
+  const target = bfSyncSearchTarget();
+  const { isEntry, isResults } = pageType || bfDetectSearchPageType();
   const atTop = window.scrollY <= BF_SHOW_THRESHOLD;
 
-  const inputWrap = document.querySelector('.search-input-wrap');
+  const inputWrap = target && target.input;
   let inputInHeaderBand = false;
   if (inputWrap) {
     const rect = inputWrap.getBoundingClientRect();
@@ -127,71 +227,98 @@ function bfUpdateMaskVisibility() {
   const shouldShow = atTop && inputInHeaderBand && (isEntry || isResults);
 
   if (shouldShow) {
-    if (bfSearchController.maskHideTimer) {
-      clearTimeout(bfSearchController.maskHideTimer);
+    if (bfSearchController.maskHideTimer !== null) {
+      window.clearTimeout(bfSearchController.maskHideTimer);
       bfSearchController.maskHideTimer = null;
     }
     mask.style.display = 'block';
-    requestAnimationFrame(() => {
-      mask.style.opacity = '1';
-    });
+    if (mask.style.opacity === '1') return;
+    if (bfSearchController.maskShowFrameId === null) {
+      bfSearchController.maskShowFrameId = requestAnimationFrame(() => {
+        bfSearchController.maskShowFrameId = null;
+        if (bfSearchController.active && bfSearchController.mask === mask) {
+          mask.style.opacity = '1';
+        }
+      });
+    }
     return;
   }
 
+  if (bfSearchController.maskShowFrameId !== null) {
+    cancelAnimationFrame(bfSearchController.maskShowFrameId);
+    bfSearchController.maskShowFrameId = null;
+  }
+  if (mask.style.display === 'none') return;
   mask.style.opacity = '0';
-  bfSearchController.maskHideTimer = window.setTimeout(() => {
-    mask.style.display = 'none';
-  }, 130);
+  if (bfSearchController.maskHideTimer === null) {
+    bfSearchController.maskHideTimer = window.setTimeout(() => {
+      bfSearchController.maskHideTimer = null;
+      if (bfSearchController.active && bfSearchController.mask === mask) {
+        mask.style.display = 'none';
+      }
+    }, 130);
+  }
 }
 
 function bfApplySearchMaskLayout() {
   if (!bfSearchController.active || !document.body) return;
 
   document.documentElement.classList.add(BF_ACTIVE_CLASS);
-  const pageType = bfDetectSearchPageType();
   bfEnsureLeftMask();
-  bfResetEntryAdjustments();
-  bfFloatSearchElements();
-  if (pageType.isEntry) {
-    bfAdjustEntryPage();
-  }
-  bfUpdateMaskVisibility();
+  bfSyncSearchTarget(true);
+  const pageType = bfDetectSearchPageType();
+  bfUpdateMaskVisibility(pageType);
+}
+
+function bfScheduleSearchUpdate(fullLayout = false) {
+  if (!bfSearchController.active) return;
+  bfSearchController.layoutRequested = bfSearchController.layoutRequested || fullLayout;
+  if (bfSearchController.updateFrameId !== null) return;
+
+  bfSearchController.updateFrameId = requestAnimationFrame(() => {
+    bfSearchController.updateFrameId = null;
+    if (!bfSearchController.active) return;
+
+    const shouldApplyLayout = bfSearchController.layoutRequested;
+    bfSearchController.layoutRequested = false;
+    if (shouldApplyLayout) {
+      bfApplySearchMaskLayout();
+    } else {
+      bfUpdateMaskVisibility();
+    }
+  });
 }
 
 function bfStartSearchMask() {
-  if (bfSearchController.active || !document.body) return;
+  if (bfSearchController.active || bfSearchPageSuspended || !document.body) return;
 
   bfSearchController.active = true;
-  bfApplySearchMaskLayout();
+  bfObserveSearchTarget(bfQuerySearchTarget());
+  bfScheduleSearchUpdate(true);
 
-  bfSearchController.observer = new MutationObserver(() => {
-    bfApplySearchMaskLayout();
-  });
-  bfSearchController.observer.observe(document.body, { childList: true, subtree: true });
-
-  let scheduled = false;
-  const scheduleUpdate = () => {
-    if (scheduled) return;
-    scheduled = true;
-    requestAnimationFrame(() => {
-      scheduled = false;
-      bfUpdateMaskVisibility();
-    });
-  };
-
-  bfSearchController.scrollHandler = scheduleUpdate;
-  bfSearchController.resizeHandler = scheduleUpdate;
+  bfSearchController.scrollHandler = () => bfScheduleSearchUpdate(false);
+  bfSearchController.resizeHandler = () => bfScheduleSearchUpdate(false);
   window.addEventListener('scroll', bfSearchController.scrollHandler, { passive: true });
   window.addEventListener('resize', bfSearchController.resizeHandler);
 }
 
 function bfStopSearchMask() {
   bfSearchController.active = false;
+  bfSearchController.layoutRequested = false;
 
-  if (bfSearchController.observer) {
-    bfSearchController.observer.disconnect();
-    bfSearchController.observer = null;
+  if (bfSearchController.updateFrameId !== null) {
+    cancelAnimationFrame(bfSearchController.updateFrameId);
+    bfSearchController.updateFrameId = null;
   }
+
+  if (bfSearchController.maskShowFrameId !== null) {
+    cancelAnimationFrame(bfSearchController.maskShowFrameId);
+    bfSearchController.maskShowFrameId = null;
+  }
+
+  bfDisconnectSearchObservers();
+  bfSearchController.root = null;
+  bfSearchController.input = null;
 
   if (bfSearchController.scrollHandler) {
     window.removeEventListener('scroll', bfSearchController.scrollHandler);
@@ -203,17 +330,26 @@ function bfStopSearchMask() {
     bfSearchController.resizeHandler = null;
   }
 
-  if (bfSearchController.maskHideTimer) {
-    clearTimeout(bfSearchController.maskHideTimer);
+  if (bfSearchController.maskHideTimer !== null) {
+    window.clearTimeout(bfSearchController.maskHideTimer);
     bfSearchController.maskHideTimer = null;
   }
 
-  document.documentElement.classList.remove(BF_ACTIVE_CLASS, 'is-entry', 'is-results');
+  document.documentElement.classList.remove(
+    BF_ACTIVE_CLASS,
+    BF_ENTRY_CLASS,
+    BF_RESULTS_CLASS
+  );
   bfRemoveLeftMask();
-  bfRestoreSearchElements();
 }
 
 function bfApplySearchFeatureState(featureState) {
+  bfLatestSearchFeatureState = featureState || {};
+  if (bfSearchPageSuspended) {
+    bfStopSearchMask();
+    return;
+  }
+
   const enabled = !featureState || featureState.searchMaskEnabled !== false;
 
   if (enabled) {
@@ -223,16 +359,82 @@ function bfApplySearchFeatureState(featureState) {
   }
 }
 
-async function bfLoadSearchRuntime() {
-  await chrome.runtime.sendMessage({ type: 'BF_ENSURE_RUNTIME' }).catch(() => null);
-  const { effectiveFeatureState } = await chrome.storage.local.get(['effectiveFeatureState']);
-  bfApplySearchFeatureState(effectiveFeatureState || {});
+function bfApplySearchSnapshot(snapshot) {
+  const featureState = snapshot && snapshot.effectiveFeatureState || {};
+  bfApplySearchFeatureState(featureState);
 }
 
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local' && changes.effectiveFeatureState) {
-    bfApplySearchFeatureState(changes.effectiveFeatureState.newValue || {});
-  }
-});
+function bfSubscribeSearchRuntime() {
+  if (bfSearchUnsubscribe) return;
 
-bfLoadSearchRuntime();
+  bfSearchUnsubscribe = bfSearchBackgroundClient.subscribe((snapshot) => {
+    bfSearchStateRequestId += 1;
+    bfApplySearchSnapshot(snapshot);
+  });
+}
+
+function bfUnsubscribeSearchRuntime() {
+  if (!bfSearchUnsubscribe) return;
+  bfSearchUnsubscribe();
+  bfSearchUnsubscribe = null;
+}
+
+async function bfRefreshSearchRuntime() {
+  const requestId = ++bfSearchStateRequestId;
+  const snapshot = await bfSearchBackgroundClient.getState({ refresh: true });
+
+  if (requestId !== bfSearchStateRequestId || bfSearchPageSuspended) return;
+  bfApplySearchSnapshot(snapshot);
+}
+
+function bfSuspendSearchRuntime() {
+  bfSearchPageSuspended = true;
+  bfSearchLifecycleGeneration += 1;
+  bfSearchStateRequestId += 1;
+  bfUnsubscribeSearchRuntime();
+  bfStopSearchMask();
+}
+
+function bfResumeSearchRuntime() {
+  if (!bfSearchPageSuspended) return;
+  bfSearchPageSuspended = false;
+  const lifecycleGeneration = ++bfSearchLifecycleGeneration;
+  bfRefreshSearchRuntime().catch(() => {
+    if (
+      !bfSearchPageSuspended &&
+      lifecycleGeneration === bfSearchLifecycleGeneration
+    ) {
+      const cachedSnapshot = bfSearchBackgroundClient.getCachedState();
+      bfApplySearchSnapshot(cachedSnapshot || {
+        effectiveFeatureState: bfLatestSearchFeatureState
+      });
+    }
+  }).finally(() => {
+    if (
+      !bfSearchPageSuspended &&
+      lifecycleGeneration === bfSearchLifecycleGeneration
+    ) {
+      bfSubscribeSearchRuntime();
+    }
+  });
+}
+
+window.addEventListener('pagehide', bfSuspendSearchRuntime);
+window.addEventListener('pageshow', bfResumeSearchRuntime);
+
+function bfInitializeSearchRuntime() {
+  const lifecycleGeneration = bfSearchLifecycleGeneration;
+  bfSubscribeSearchRuntime();
+  bfRefreshSearchRuntime().catch(() => {
+    const cachedSnapshot = bfSearchBackgroundClient.getCachedState();
+    if (
+      !bfSearchPageSuspended &&
+      lifecycleGeneration === bfSearchLifecycleGeneration &&
+      cachedSnapshot
+    ) {
+      bfApplySearchSnapshot(cachedSnapshot);
+    }
+  });
+}
+
+bfInitializeSearchRuntime();

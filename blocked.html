@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bilibili FOCUS · 访问已暂停</title>
+  <link rel="stylesheet" href="blocked.css">
+</head>
+<body>
+  <main class="blocked-shell" aria-live="polite">
+    <section class="blocked-card">
+      <p class="eyebrow">BILIBILI FOCUS</p>
+      <h1>当前无法访问 bilibili</h1>
+      <p id="blockedSubtitle" class="subtitle">你设置的访问限制正在生效。</p>
+
+      <div class="status-grid">
+        <article class="status-item">
+          <span>触发原因</span>
+          <strong id="blockedReasons">访问限制条件</strong>
+        </article>
+        <article class="status-item">
+          <span>预计结束</span>
+          <strong id="blockedUntil">暂不可用</strong>
+        </article>
+      </div>
+
+      <p id="blockedMode" class="mode-note">限制解除后，此标签页会自动恢复到安全目标。</p>
+      <p id="blockedError" class="error-message" role="status"></p>
+    </section>
+  </main>
+
+  <script src="lockShared.js"></script>
+  <script src="runtimeContracts.js"></script>
+  <script src="backgroundClient.js"></script>
+  <script src="blocked.js"></script>
+</body>
+</html>

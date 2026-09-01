@@ -10,8 +10,8 @@
     <header class="page-header">
       <div class="page-copy">
         <p class="page-kicker">Bilibili FOCUS</p>
-        <h1>锁定与外观设置</h1>
-        <p>命中任一规则时，扩展四项功能都会被强制开启且无法从弹窗关闭。</p>
+        <h1>锁定、外观与播放器设置</h1>
+        <p>配置访问限制、严格模式、界面主题，以及普通视频页的自定义播放器快捷键。</p>
       </div>
       <div class="header-actions">
         <button id="saveSettings" class="primary-button">保存设置</button>
@@ -56,6 +56,132 @@
               <strong>深色模式</strong>
               <span>降低亮度刺激，更贴近夜间观感。</span>
             </span>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <section class="settings-section">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">访问限制</p>
+          <h2>触发条件</h2>
+          <p>勾选后，对应条件一旦触发就会自动开启下方选中的功能。</p>
+        </div>
+      </div>
+
+      <div class="check-grid">
+        <label class="check-card">
+          <input type="checkbox" id="blockWhenScheduled">
+          <span class="check-card-copy">
+            <strong>固定时段</strong>
+            <span>在你设定的每周时间段内自动开启所选功能。</span>
+          </span>
+        </label>
+
+        <label class="check-card">
+          <input type="checkbox" id="blockDuringFocus">
+          <span class="check-card-copy">
+            <strong>专注倒计时</strong>
+            <span>开始专注后，在倒计时结束前自动开启所选功能。</span>
+          </span>
+        </label>
+
+        <label class="check-card">
+          <input type="checkbox" id="blockAfterDailyLimit">
+          <span class="check-card-copy">
+            <strong>累计使用超时</strong>
+            <span>当天累计使用超过阈值后自动开启所选功能，直到下一次重置。</span>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <section class="settings-section">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">访问限制</p>
+          <h2>规则触发时自动开启</h2>
+          <p>选择规则触发后要自动开启的功能；严格模式生效期间，这些功能无法在插件面板关闭。</p>
+        </div>
+      </div>
+
+      <div class="check-grid lock-feature-grid">
+        <label class="check-card">
+          <input type="checkbox" id="lockFeatureSiteBlock" data-lock-feature-key="siteBlockEnabled">
+          <span class="check-card-copy">
+            <strong>站点封锁</strong>
+            <span>将顶层 Bilibili 标签页切换到扩展自有封锁页。</span>
+          </span>
+        </label>
+
+        <label class="check-card">
+          <input type="checkbox" id="lockFeatureRedirect" data-lock-feature-key="redirectEnabled">
+          <span class="check-card-copy">
+            <strong>全局专注重定向</strong>
+            <span>将容易分心的页面重定向到更精简的搜索入口。</span>
+          </span>
+        </label>
+
+        <label class="check-card">
+          <input type="checkbox" id="lockFeaturePlayerMask" data-lock-feature-key="playerMaskEnabled">
+          <span class="check-card-copy">
+            <strong>隐藏播放页相关推荐</strong>
+            <span>隐藏播放页整个相关推荐区域，保留其他页面内容。</span>
+          </span>
+        </label>
+
+        <label class="check-card">
+          <input type="checkbox" id="lockFeatureAutoPlayOff" data-lock-feature-key="autoPlayOffEnabled">
+          <span class="check-card-copy">
+            <strong>自动关闭连播并隐藏结束推荐</strong>
+            <span>自动关闭连播，并隐藏视频结束后的播放器内推荐。</span>
+          </span>
+        </label>
+
+        <label class="check-card">
+          <input type="checkbox" id="lockFeatureSearchMask" data-lock-feature-key="searchMaskEnabled">
+          <span class="check-card-copy">
+            <strong>搜索页遮罩</strong>
+            <span>隐藏搜索结果与热搜，只保留精简搜索界面。</span>
+          </span>
+        </label>
+      </div>
+    </section>
+
+    <section class="settings-section" id="playerShortcutSettings">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">播放器</p>
+          <h2>自定义快捷键</h2>
+          <p>鼠标位于普通视频播放器内，或播放器处于网页全屏、全屏时生效。输入框与可编辑区域不会拦截。</p>
+        </div>
+        <label class="switch-row">
+          <span>启用自定义快捷键</span>
+          <span class="switch-control">
+            <input type="checkbox" id="playerShortcutsEnabled">
+            <span class="switch-track" aria-hidden="true"></span>
+          </span>
+        </label>
+      </div>
+
+      <p class="shortcut-help">点击“录制”后按下单键或组合键。新按键会自动从旧动作移除；浏览器和操作系统保留的组合键可能无法被网页接收。</p>
+      <div id="shortcutBindingList" class="shortcut-binding-list"></div>
+      <p id="shortcutRecordingHint" class="shortcut-recording-hint" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="settings-section">
+      <div class="section-head">
+        <div>
+          <p class="section-kicker">访问限制</p>
+          <h2>严格模式</h2>
+          <p>开启后，只要命中你勾选的条件，就无法通过插件面板关闭已锁定功能。</p>
+        </div>
+        <label class="switch-row">
+          <span>开启严格模式</span>
+          <span class="switch-control">
+            <input type="checkbox" id="strictModeEnabled">
+            <span class="switch-track" aria-hidden="true"></span>
           </span>
         </label>
       </div>
@@ -118,13 +244,16 @@
         </div>
       </div>
       <ul class="notes">
-        <li>专注倒计时在扩展弹窗里启动，属于手动锁定条件。</li>
-        <li>锁定只保证扩展内部无法关闭，不包含 Chrome 扩展页停用或卸载。</li>
+        <li>专注倒计时在扩展弹窗里启动，可以单独决定它是否触发所选功能。</li>
+        <li>关闭严格模式后，命中条件时仍会自动开启所选功能，但可以在插件面板更改。</li>
+        <li>限制只保证扩展内部无法关闭，不包含 Chrome 扩展页停用或卸载。</li>
       </ul>
     </section>
   </main>
 
   <script src="lockShared.js"></script>
+  <script src="runtimeContracts.js"></script>
+  <script src="backgroundClient.js"></script>
   <script src="options.js"></script>
 </body>
 </html>

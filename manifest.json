@@ -1,9 +1,10 @@
 {
   "manifest_version": 3,
   "name": "Bilibili 屏蔽插件合集",
-  "version": "3.0",
-  "description": "屏蔽 Bilibili 多余推荐内容，并支持锁定策略、专注重定向、结束推荐屏蔽与主题化控制面板",
-  "permissions": ["storage", "scripting", "tabs", "alarms"],
+  "version": "3.4.0",
+  "minimum_chrome_version": "102",
+  "description": "屏蔽 Bilibili 多余推荐内容，并支持锁定策略、专注重定向、播放器快捷键与主题化控制面板",
+  "permissions": ["storage", "tabs", "alarms", "webNavigation"],
   "host_permissions": ["*://*.bilibili.com/*"],
   "background": {
     "service_worker": "background.js"
@@ -11,7 +12,7 @@
   "content_scripts": [
     {
       "matches": ["*://*.bilibili.com/*"],
-      "js": ["redirect.js"],
+      "js": ["lockShared.js", "runtimeContracts.js", "backgroundClient.js", "redirect.js", "playerShortcuts.js"],
       "run_at": "document_start"
     },
     {

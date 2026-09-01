@@ -412,6 +412,14 @@ input {
   justify-content: flex-end;
 }
 
+.command-error {
+  min-height: 16px;
+  margin: 0;
+  color: var(--danger);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .settings-link {
   width: auto;
   justify-content: center;

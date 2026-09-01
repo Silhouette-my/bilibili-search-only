@@ -1,322 +1,88 @@
-const BF_PLAYER_SELECTORS = [
-  '.bpx-player-container',
-  '.bpx-player-video-wrap',
-  '.bpx-player'
-];
+const BF_PLAYER_RECOMMENDATIONS_SELECTOR = '.recommend-list-v1';
 
-const bfPlayerMaskController = {
+const bfPlayerBackgroundClient = globalThis.BiliFocusClient;
+
+const bfPlayerRecommendationsController = {
   active: false,
-  style: null,
-  elements: null,
-  observer: null,
-  gap: 12,
-  radius: 12,
-  onResize: null,
-  onScroll: null
+  style: null
 };
 
 const bfAutoPlayController = {
   active: false,
   style: null,
   observer: null,
+  observerMode: 'none',
+  root: null,
+  switchButton: null,
   intervalId: null,
   timeoutId: null,
-  pendingCheck: false,
+  frameId: null,
   lastClickTime: 0
 };
 
-function bfEnsurePlayerMaskStyle() {
-  if (bfPlayerMaskController.style) return;
+let bfPlayerPageSuspended = false;
+let bfLatestPlayerFeatureState = {};
+let bfPlayerStateRequestId = 0;
+let bfPlayerUnsubscribe = null;
+let bfPlayerLifecycleGeneration = 0;
+
+function bfEnsurePlayerRecommendationsStyle() {
+  if (bfPlayerRecommendationsController.style) {
+    if (!bfPlayerRecommendationsController.style.isConnected) {
+      document.head.appendChild(bfPlayerRecommendationsController.style);
+    }
+    return;
+  }
 
   const style = document.createElement('style');
-  style.id = 'bili-player-mask-style';
+  style.id = 'bili-hide-player-recommendations-style';
   style.textContent = `
-    .bili-strip {
-      position: fixed;
-      z-index: 999999;
-      background: rgba(0,0,0,0.22);
-      backdrop-filter: grayscale(70%) contrast(80%) brightness(99%);
-      pointer-events: auto;
-    }
-    .bili-corner {
-      position: fixed;
-      z-index: 1000000;
-      width: 12px;
-      height: 12px;
-      background: rgba(0,0,0,0.22);
-      backdrop-filter: grayscale(70%) contrast(80%) brightness(99%);
-      pointer-events: none;
-    }
-    .corner-tl {
-      -webkit-mask: radial-gradient(circle at 100% 100%, #000 0px, #000 100%, transparent 100%);
-      mask: radial-gradient(circle at 100% 100%, #000 0px, #000 100%, transparent 100%);
-    }
-    .corner-tr {
-      -webkit-mask: radial-gradient(circle at 0% 100%, #000 0px, #000 100%, transparent 100%);
-      mask: radial-gradient(circle at 0% 100%, #000 0px, #000 100%, transparent 100%);
-    }
-    .corner-bl {
-      -webkit-mask: radial-gradient(circle at 100% 0%, #000 0px, #000 100%, transparent 100%);
-      mask: radial-gradient(circle at 100% 0%, #000 0px, #000 100%, transparent 100%);
-    }
-    .corner-br {
-      -webkit-mask: radial-gradient(circle at 0% 0%, #000 0px, #000 100%, transparent 100%);
-      mask: radial-gradient(circle at 0% 0%, #000 0px, #000 100%, transparent 100%);
-    }
-    .bili-focus-ring {
-      position: fixed;
-      z-index: 1000001;
-      pointer-events: none;
-      box-shadow:
-        0 0 0 2px rgba(255,255,255,0.14),
-        0 18px 54px rgba(0,0,0,0.42);
-      border-radius: 12px;
-      transition: top .2s ease, left .2s ease, width .2s ease, height .2s ease;
+    ${BF_PLAYER_RECOMMENDATIONS_SELECTOR} {
+      display: none !important;
     }
   `;
   document.head.appendChild(style);
-  bfPlayerMaskController.style = style;
+  bfPlayerRecommendationsController.style = style;
 }
 
-function bfCreatePlayerMaskElements() {
-  if (bfPlayerMaskController.elements) return bfPlayerMaskController.elements;
+function bfStartPlayerRecommendations() {
+  if (bfPlayerPageSuspended || !document.head) return;
 
-  const topStrip = document.createElement('div');
-  topStrip.className = 'bili-strip';
-  const bottomStrip = document.createElement('div');
-  bottomStrip.className = 'bili-strip';
-  const leftStrip = document.createElement('div');
-  leftStrip.className = 'bili-strip';
-  const rightStrip = document.createElement('div');
-  rightStrip.className = 'bili-strip';
-
-  const cornerTL = document.createElement('div');
-  cornerTL.className = 'bili-corner corner-tl';
-  const cornerTR = document.createElement('div');
-  cornerTR.className = 'bili-corner corner-tr';
-  const cornerBL = document.createElement('div');
-  cornerBL.className = 'bili-corner corner-bl';
-  const cornerBR = document.createElement('div');
-  cornerBR.className = 'bili-corner corner-br';
-
-  const ring = document.createElement('div');
-  ring.className = 'bili-focus-ring';
-
-  bfPlayerMaskController.elements = {
-    topStrip,
-    bottomStrip,
-    leftStrip,
-    rightStrip,
-    cornerTL,
-    cornerTR,
-    cornerBL,
-    cornerBR,
-    ring
-  };
-
-  return bfPlayerMaskController.elements;
+  bfPlayerRecommendationsController.active = true;
+  bfEnsurePlayerRecommendationsStyle();
 }
 
-function bfAttachPlayerMaskElements() {
-  const elements = bfCreatePlayerMaskElements();
-  Object.values(elements).forEach((element) => {
-    if (!element.isConnected) {
-      document.body.appendChild(element);
+function bfStopPlayerRecommendations() {
+  bfPlayerRecommendationsController.active = false;
+  if (bfPlayerRecommendationsController.style) {
+    bfPlayerRecommendationsController.style.remove();
+    bfPlayerRecommendationsController.style = null;
+  }
+}
+
+function bfObserveAncestorChildLists(observer, node, observedTargets = new Set()) {
+  let current = node;
+  while (current && current.parentNode) {
+    const parent = current.parentNode;
+    if (!observedTargets.has(parent)) {
+      observer.observe(parent, {
+        childList: true,
+        attributes: true,
+        attributeFilter: ['class', 'style']
+      });
+      observedTargets.add(parent);
     }
-  });
-}
-
-function bfRemovePlayerMaskElements() {
-  if (!bfPlayerMaskController.elements) return;
-  Object.values(bfPlayerMaskController.elements).forEach((element) => element.remove());
-}
-
-function bfGetPlayerElement() {
-  return BF_PLAYER_SELECTORS
-    .map((selector) => document.querySelector(selector))
-    .find(Boolean) || null;
-}
-
-function bfParseRadius(value) {
-  if (!value) return NaN;
-  const match = value.match(/(\d+(\.\d+)?)px/);
-  return match ? Number(match[1]) : NaN;
-}
-
-function bfGetPlayerRect() {
-  const player = bfGetPlayerElement();
-  if (!player) return null;
-
-  const rect = player.getBoundingClientRect();
-  const style = getComputedStyle(player);
-  const radii = [
-    bfParseRadius(style.borderTopLeftRadius),
-    bfParseRadius(style.borderTopRightRadius),
-    bfParseRadius(style.borderBottomLeftRadius),
-    bfParseRadius(style.borderBottomRightRadius)
-  ].filter((value) => !Number.isNaN(value));
-
-  if (radii.length) {
-    bfPlayerMaskController.radius = Math.round(
-      radii.reduce((sum, value) => sum + value, 0) / radii.length
-    );
-  }
-
-  return {
-    top: Math.max(0, rect.top - bfPlayerMaskController.gap),
-    left: Math.max(0, rect.left - bfPlayerMaskController.gap),
-    right: Math.min(window.innerWidth, rect.right + bfPlayerMaskController.gap),
-    bottom: Math.min(window.innerHeight, rect.bottom + bfPlayerMaskController.gap)
-  };
-}
-
-function bfUpdatePlayerMask() {
-  if (!bfPlayerMaskController.active || !bfPlayerMaskController.elements) return;
-
-  const rect = bfGetPlayerRect();
-  if (!rect) {
-    Object.values(bfPlayerMaskController.elements).forEach((element) => {
-      element.style.display = 'none';
-    });
-    return;
-  }
-
-  const { top, left, right, bottom } = rect;
-  const { radius } = bfPlayerMaskController;
-  const {
-    topStrip,
-    bottomStrip,
-    leftStrip,
-    rightStrip,
-    cornerTL,
-    cornerTR,
-    cornerBL,
-    cornerBR,
-    ring
-  } = bfPlayerMaskController.elements;
-
-  Object.values(bfPlayerMaskController.elements).forEach((element) => {
-    element.style.display = 'block';
-  });
-
-  [cornerTL, cornerTR, cornerBL, cornerBR].forEach((corner) => {
-    corner.style.width = `${radius}px`;
-    corner.style.height = `${radius}px`;
-  });
-  ring.style.borderRadius = `${radius}px`;
-
-  topStrip.style.top = '0px';
-  topStrip.style.left = '0px';
-  topStrip.style.width = '100vw';
-  topStrip.style.height = `${top}px`;
-
-  bottomStrip.style.top = `${bottom}px`;
-  bottomStrip.style.left = '0px';
-  bottomStrip.style.width = '100vw';
-  bottomStrip.style.height = `${window.innerHeight - bottom}px`;
-
-  leftStrip.style.top = `${top}px`;
-  leftStrip.style.left = '0px';
-  leftStrip.style.width = `${left}px`;
-  leftStrip.style.height = `${bottom - top}px`;
-
-  rightStrip.style.top = `${top}px`;
-  rightStrip.style.left = `${right}px`;
-  rightStrip.style.width = `${window.innerWidth - right}px`;
-  rightStrip.style.height = `${bottom - top}px`;
-
-  cornerTL.style.top = `${top}px`;
-  cornerTL.style.left = `${left}px`;
-
-  cornerTR.style.top = `${top}px`;
-  cornerTR.style.left = `${right - radius}px`;
-
-  cornerBL.style.top = `${bottom - radius}px`;
-  cornerBL.style.left = `${left}px`;
-
-  cornerBR.style.top = `${bottom - radius}px`;
-  cornerBR.style.left = `${right - radius}px`;
-
-  ring.style.top = `${top}px`;
-  ring.style.left = `${left}px`;
-  ring.style.width = `${right - left}px`;
-  ring.style.height = `${bottom - top}px`;
-}
-
-function bfEnableScrollLock() {
-  document.body.style.overflow = 'hidden';
-  document.documentElement.style.overflow = 'hidden';
-
-  const blockScroll = (event) => event.preventDefault();
-  window.addEventListener('wheel', blockScroll, { passive: false });
-  window.addEventListener('touchmove', blockScroll, { passive: false });
-  window.__biliBlockScroll = blockScroll;
-}
-
-function bfDisableScrollLock() {
-  document.body.style.overflow = '';
-  document.documentElement.style.overflow = '';
-
-  if (window.__biliBlockScroll) {
-    window.removeEventListener('wheel', window.__biliBlockScroll, { passive: false });
-    window.removeEventListener('touchmove', window.__biliBlockScroll, { passive: false });
-    window.__biliBlockScroll = null;
-  }
-}
-
-function bfStartPlayerMask() {
-  if (bfPlayerMaskController.active || !document.body) return;
-
-  bfPlayerMaskController.active = true;
-  bfEnsurePlayerMaskStyle();
-  bfAttachPlayerMaskElements();
-  bfEnableScrollLock();
-
-  bfPlayerMaskController.onResize = () => bfUpdatePlayerMask();
-  bfPlayerMaskController.onScroll = () => bfUpdatePlayerMask();
-  bfPlayerMaskController.observer = new MutationObserver(() => bfUpdatePlayerMask());
-  bfPlayerMaskController.observer.observe(document.body, { childList: true, subtree: true });
-
-  window.addEventListener('resize', bfPlayerMaskController.onResize);
-  window.addEventListener('scroll', bfPlayerMaskController.onScroll, { passive: true });
-
-  bfUpdatePlayerMask();
-}
-
-function bfStopPlayerMask() {
-  if (!bfPlayerMaskController.active) {
-    bfDisableScrollLock();
-    return;
-  }
-
-  bfPlayerMaskController.active = false;
-  bfDisableScrollLock();
-
-  if (bfPlayerMaskController.observer) {
-    bfPlayerMaskController.observer.disconnect();
-    bfPlayerMaskController.observer = null;
-  }
-
-  if (bfPlayerMaskController.onResize) {
-    window.removeEventListener('resize', bfPlayerMaskController.onResize);
-    bfPlayerMaskController.onResize = null;
-  }
-
-  if (bfPlayerMaskController.onScroll) {
-    window.removeEventListener('scroll', bfPlayerMaskController.onScroll);
-    bfPlayerMaskController.onScroll = null;
-  }
-
-  bfRemovePlayerMaskElements();
-
-  if (bfPlayerMaskController.style) {
-    bfPlayerMaskController.style.remove();
-    bfPlayerMaskController.style = null;
+    current = parent;
   }
 }
 
 function bfEnsureEndingStyle() {
-  if (bfAutoPlayController.style) return;
+  if (bfAutoPlayController.style) {
+    if (!bfAutoPlayController.style.isConnected) {
+      document.head.appendChild(bfAutoPlayController.style);
+    }
+    return;
+  }
 
   const style = document.createElement('style');
   style.id = 'bili-hide-ending-related-style';
@@ -336,15 +102,101 @@ function bfRemoveEndingStyle() {
   }
 }
 
-function bfFindAutoPlaySwitch() {
-  return Array.from(document.querySelectorAll('.continuous-btn .txt'))
+function bfQueryAutoPlayTarget() {
+  const root = Array.from(document.querySelectorAll('.continuous-btn .txt'))
     .find((label) => label.textContent.trim() === '自动连播')
-    ?.closest('.continuous-btn')
-    ?.querySelector('.switch-btn') || null;
+    ?.closest('.continuous-btn') || null;
+  const switchButton = root?.querySelector('.switch-btn') || null;
+  return root && switchButton ? { root, switchButton } : null;
+}
+
+function bfDisconnectAutoPlayObserver() {
+  if (bfAutoPlayController.observer) {
+    bfAutoPlayController.observer.disconnect();
+    bfAutoPlayController.observer = null;
+  }
+  bfAutoPlayController.observerMode = 'none';
+}
+
+function bfObserveAutoPlayTarget(target) {
+  bfDisconnectAutoPlayObserver();
+  bfAutoPlayController.root = target && target.root.isConnected ? target.root : null;
+  bfAutoPlayController.switchButton =
+    target && target.switchButton.isConnected ? target.switchButton : null;
+
+  if (!bfAutoPlayController.active || !document.body) return;
+
+  if (!bfAutoPlayController.root || !bfAutoPlayController.switchButton) {
+    bfAutoPlayController.root = null;
+    bfAutoPlayController.switchButton = null;
+    bfAutoPlayController.observerMode = 'discovery';
+    bfAutoPlayController.observer = new MutationObserver(() => {
+      if (!bfAutoPlayController.active) return;
+      bfSyncAutoPlayTarget(true);
+      bfScheduleAutoPlayCheck();
+    });
+    bfAutoPlayController.observer.observe(document.body, {
+      childList: true,
+      subtree: true
+    });
+    if (document.documentElement !== document.body) {
+      bfAutoPlayController.observer.observe(document.documentElement, { childList: true });
+    }
+    bfAutoPlayController.observer.observe(document.head, { childList: true });
+    return;
+  }
+
+  const currentRoot = bfAutoPlayController.root;
+  bfAutoPlayController.observerMode = 'target';
+  bfAutoPlayController.observer = new MutationObserver(() => {
+    if (!bfAutoPlayController.active) return;
+    bfSyncAutoPlayTarget(true);
+    bfScheduleAutoPlayCheck();
+  });
+  bfAutoPlayController.observer.observe(currentRoot, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class']
+  });
+  bfObserveAncestorChildLists(
+    bfAutoPlayController.observer,
+    currentRoot,
+    new Set([currentRoot])
+  );
+  bfAutoPlayController.observer.observe(document.head, { childList: true });
+}
+
+function bfSyncAutoPlayTarget(force = false) {
+  if (
+    !force &&
+    bfAutoPlayController.root &&
+    bfAutoPlayController.root.isConnected &&
+    bfAutoPlayController.switchButton &&
+    bfAutoPlayController.switchButton.isConnected
+  ) {
+    return {
+      root: bfAutoPlayController.root,
+      switchButton: bfAutoPlayController.switchButton
+    };
+  }
+
+  const nextTarget = bfQueryAutoPlayTarget();
+  if (
+    nextTarget &&
+    nextTarget.root === bfAutoPlayController.root &&
+    nextTarget.switchButton === bfAutoPlayController.switchButton
+  ) {
+    return nextTarget;
+  }
+  bfObserveAutoPlayTarget(nextTarget);
+  return nextTarget;
 }
 
 function bfCloseAutoPlayIfNeeded() {
-  const switchButton = bfFindAutoPlaySwitch();
+  bfEnsureEndingStyle();
+  const target = bfSyncAutoPlayTarget();
+  const switchButton = target && target.switchButton;
   if (!switchButton || !switchButton.classList.contains('on')) return;
 
   const now = Date.now();
@@ -355,53 +207,52 @@ function bfCloseAutoPlayIfNeeded() {
 }
 
 function bfScheduleAutoPlayCheck() {
-  if (!bfAutoPlayController.active || bfAutoPlayController.pendingCheck) return;
+  if (!bfAutoPlayController.active || bfAutoPlayController.frameId !== null) return;
 
-  bfAutoPlayController.pendingCheck = true;
-  requestAnimationFrame(() => {
-    bfAutoPlayController.pendingCheck = false;
-    bfCloseAutoPlayIfNeeded();
+  bfAutoPlayController.frameId = requestAnimationFrame(() => {
+    bfAutoPlayController.frameId = null;
+    if (bfAutoPlayController.active) {
+      bfCloseAutoPlayIfNeeded();
+    }
   });
 }
 
 function bfStartAutoPlayController() {
-  if (bfAutoPlayController.active || !document.body) return;
+  if (bfAutoPlayController.active || bfPlayerPageSuspended || !document.body) return;
 
   bfAutoPlayController.active = true;
   bfEnsureEndingStyle();
+  bfObserveAutoPlayTarget(bfQueryAutoPlayTarget());
   bfScheduleAutoPlayCheck();
 
   bfAutoPlayController.intervalId = window.setInterval(bfScheduleAutoPlayCheck, 1000);
   bfAutoPlayController.timeoutId = window.setTimeout(() => {
-    if (bfAutoPlayController.intervalId) {
+    if (bfAutoPlayController.intervalId !== null) {
       window.clearInterval(bfAutoPlayController.intervalId);
       bfAutoPlayController.intervalId = null;
     }
+    bfAutoPlayController.timeoutId = null;
   }, 15000);
 
-  bfAutoPlayController.observer = new MutationObserver(() => bfScheduleAutoPlayCheck());
-  bfAutoPlayController.observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['class']
-  });
 }
 
 function bfStopAutoPlayController() {
   bfAutoPlayController.active = false;
-  bfAutoPlayController.pendingCheck = false;
   bfAutoPlayController.lastClickTime = 0;
 
-  if (bfAutoPlayController.observer) {
-    bfAutoPlayController.observer.disconnect();
-    bfAutoPlayController.observer = null;
+  if (bfAutoPlayController.frameId !== null) {
+    cancelAnimationFrame(bfAutoPlayController.frameId);
+    bfAutoPlayController.frameId = null;
   }
-  if (bfAutoPlayController.intervalId) {
+
+  bfDisconnectAutoPlayObserver();
+  bfAutoPlayController.root = null;
+  bfAutoPlayController.switchButton = null;
+  if (bfAutoPlayController.intervalId !== null) {
     window.clearInterval(bfAutoPlayController.intervalId);
     bfAutoPlayController.intervalId = null;
   }
-  if (bfAutoPlayController.timeoutId) {
+  if (bfAutoPlayController.timeoutId !== null) {
     window.clearTimeout(bfAutoPlayController.timeoutId);
     bfAutoPlayController.timeoutId = null;
   }
@@ -410,13 +261,21 @@ function bfStopAutoPlayController() {
 }
 
 function bfApplyEffectiveFeatureState(featureState) {
-  const playerMaskEnabled = !featureState || featureState.playerMaskEnabled !== false;
+  bfLatestPlayerFeatureState = featureState || {};
+  if (bfPlayerPageSuspended) {
+    bfStopPlayerRecommendations();
+    bfStopAutoPlayController();
+    return;
+  }
+
+  const playerRecommendationsHidden =
+    !featureState || featureState.playerMaskEnabled !== false;
   const autoPlayOffEnabled = !featureState || featureState.autoPlayOffEnabled !== false;
 
-  if (playerMaskEnabled) {
-    bfStartPlayerMask();
+  if (playerRecommendationsHidden) {
+    bfStartPlayerRecommendations();
   } else {
-    bfStopPlayerMask();
+    bfStopPlayerRecommendations();
   }
 
   if (autoPlayOffEnabled) {
@@ -426,16 +285,83 @@ function bfApplyEffectiveFeatureState(featureState) {
   }
 }
 
-async function bfLoadPlayerRuntime() {
-  await chrome.runtime.sendMessage({ type: 'BF_ENSURE_RUNTIME' }).catch(() => null);
-  const { effectiveFeatureState } = await chrome.storage.local.get(['effectiveFeatureState']);
-  bfApplyEffectiveFeatureState(effectiveFeatureState || {});
+function bfApplyPlayerSnapshot(snapshot) {
+  const featureState = snapshot && snapshot.effectiveFeatureState || {};
+  bfApplyEffectiveFeatureState(featureState);
 }
 
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local' && changes.effectiveFeatureState) {
-    bfApplyEffectiveFeatureState(changes.effectiveFeatureState.newValue || {});
-  }
-});
+function bfSubscribePlayerRuntime() {
+  if (bfPlayerUnsubscribe) return;
 
-bfLoadPlayerRuntime();
+  bfPlayerUnsubscribe = bfPlayerBackgroundClient.subscribe((snapshot) => {
+    bfPlayerStateRequestId += 1;
+    bfApplyPlayerSnapshot(snapshot);
+  });
+}
+
+function bfUnsubscribePlayerRuntime() {
+  if (!bfPlayerUnsubscribe) return;
+  bfPlayerUnsubscribe();
+  bfPlayerUnsubscribe = null;
+}
+
+async function bfRefreshPlayerRuntime() {
+  const requestId = ++bfPlayerStateRequestId;
+  const snapshot = await bfPlayerBackgroundClient.getState({ refresh: true });
+
+  if (requestId !== bfPlayerStateRequestId || bfPlayerPageSuspended) return;
+  bfApplyPlayerSnapshot(snapshot);
+}
+
+function bfSuspendPlayerRuntime() {
+  bfPlayerPageSuspended = true;
+  bfPlayerLifecycleGeneration += 1;
+  bfPlayerStateRequestId += 1;
+  bfUnsubscribePlayerRuntime();
+  bfStopPlayerRecommendations();
+  bfStopAutoPlayController();
+}
+
+function bfResumePlayerRuntime() {
+  if (!bfPlayerPageSuspended) return;
+  bfPlayerPageSuspended = false;
+  const lifecycleGeneration = ++bfPlayerLifecycleGeneration;
+  bfRefreshPlayerRuntime().catch(() => {
+    if (
+      !bfPlayerPageSuspended &&
+      lifecycleGeneration === bfPlayerLifecycleGeneration
+    ) {
+      const cachedSnapshot = bfPlayerBackgroundClient.getCachedState();
+      bfApplyPlayerSnapshot(cachedSnapshot || {
+        effectiveFeatureState: bfLatestPlayerFeatureState
+      });
+    }
+  }).finally(() => {
+    if (
+      !bfPlayerPageSuspended &&
+      lifecycleGeneration === bfPlayerLifecycleGeneration
+    ) {
+      bfSubscribePlayerRuntime();
+    }
+  });
+}
+
+window.addEventListener('pagehide', bfSuspendPlayerRuntime);
+window.addEventListener('pageshow', bfResumePlayerRuntime);
+
+function bfInitializePlayerRuntime() {
+  const lifecycleGeneration = bfPlayerLifecycleGeneration;
+  bfSubscribePlayerRuntime();
+  bfRefreshPlayerRuntime().catch(() => {
+    const cachedSnapshot = bfPlayerBackgroundClient.getCachedState();
+    if (
+      !bfPlayerPageSuspended &&
+      lifecycleGeneration === bfPlayerLifecycleGeneration &&
+      cachedSnapshot
+    ) {
+      bfApplyPlayerSnapshot(cachedSnapshot);
+    }
+  });
+}
+
+bfInitializePlayerRuntime();

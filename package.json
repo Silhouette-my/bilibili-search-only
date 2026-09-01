@@ -1,0 +1,16 @@
+{
+  "name": "bilibili-focus",
+  "version": "3.4.0",
+  "private": true,
+  "description": "Release validation and deterministic packaging for the Bilibili FOCUS browser extension",
+  "scripts": {
+    "test": "node --test tests/*.test.cjs",
+    "check": "node --check background.js && node --check backgroundClient.js && node --check blocked.js && node --check controlPanel.js && node --check lockShared.js && node --check options.js && node --check playerOverlay.js && node --check playerShortcuts.js && node --check redirect.js && node --check runtimeContracts.js && node --check runtimeCore.js && node --check searchOverlay.js && node --check storageSchema.js && node --check scripts/validate-extension.cjs && node --check scripts/package-extension.cjs && node --check scripts/mv3-e2e.cjs",
+    "validate": "node scripts/validate-extension.cjs",
+    "package": "node scripts/package-extension.cjs",
+    "test:mv3": "node scripts/mv3-e2e.cjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

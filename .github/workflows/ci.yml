@@ -1,0 +1,73 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate and package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.18.0
+
+      - name: Validate runtime closure and security policy
+        run: npm run validate
+
+      - name: Check JavaScript syntax
+        run: npm run check
+
+      - name: Run unit and regression tests
+        run: npm test
+
+      - name: Build deterministic extension archive
+        run: npm run package -- --out-dir dist
+
+      - name: Upload release candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: bilibili-focus-extension
+          path: |
+            dist/*.zip
+            dist/*.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  mv3-smoke:
+    name: MV3 browser smoke
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.18.0
+
+      - name: Install pinned Playwright for CI only
+        run: npm install --ignore-scripts --no-audit --no-fund --no-save --no-package-lock playwright@1.55.0
+
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Run isolated MV3 smoke test
+        run: npm run test:mv3

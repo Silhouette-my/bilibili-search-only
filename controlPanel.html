@@ -23,6 +23,16 @@
     <div class="toggle-group">
       <label class="toggle-item">
         <span class="toggle-copy">
+          <span class="toggle-title">站点封锁</span>
+        </span>
+        <span class="toggle-switch">
+          <input type="checkbox" id="toggleSiteBlock">
+          <span class="toggle-slider" aria-hidden="true"></span>
+        </span>
+      </label>
+
+      <label class="toggle-item">
+        <span class="toggle-copy">
           <span class="toggle-title">全局专注重定向</span>
         </span>
         <span class="toggle-switch">
@@ -33,7 +43,7 @@
 
       <label class="toggle-item">
         <span class="toggle-copy">
-          <span class="toggle-title">播放页遮罩</span>
+          <span class="toggle-title">隐藏播放页相关推荐</span>
         </span>
         <span class="toggle-switch">
           <input type="checkbox" id="togglePlayer">
@@ -86,9 +96,12 @@
     <div class="footer-actions">
       <button type="button" class="settings-link" id="openSettings">打开锁定与外观设置</button>
     </div>
+    <p class="command-error" id="commandError" role="status"></p>
   </main>
 
   <script src="lockShared.js"></script>
+  <script src="runtimeContracts.js"></script>
+  <script src="backgroundClient.js"></script>
   <script src="controlPanel.js"></script>
 </body>
 </html>

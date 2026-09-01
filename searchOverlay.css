@@ -10,7 +10,7 @@ html.bili-search-mask-active #biliMainFooter {
 }
 
 /* 搜索页：垂直居中布局 */
-html.bili-search-mask-active.is-entry .search-center {
+html.bili-search-mask-active.bili-search-page-entry .search-center {
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
@@ -19,8 +19,12 @@ html.bili-search-mask-active.is-entry .search-center {
   box-sizing: border-box !important;
 }
 
+html.bili-search-mask-active.bili-search-page-entry #i_cecream {
+  min-height: 100vh !important;
+}
+
 /* 搜索页：搜索框居中 */
-html.bili-search-mask-active.is-entry .search-input-wrap {
+html.bili-search-mask-active.bili-search-page-entry .search-input-wrap {
   position: relative !important;
   left: auto !important;
   top: auto !important;
@@ -30,7 +34,7 @@ html.bili-search-mask-active.is-entry .search-input-wrap {
 }
 
 /* 搜索页：标题间距优化 */
-html.bili-search-mask-active.is-entry .search-center-title {
+html.bili-search-mask-active.bili-search-page-entry .search-center-title {
   margin-top: 0 !important;
   margin-bottom: 16px !important;
   position: relative !important;
@@ -38,7 +42,7 @@ html.bili-search-mask-active.is-entry .search-center-title {
 }
 
 /* 结果页：搜索框保持顶部内联 */
-html.bili-search-mask-active.is-results .search-input-wrap {
+html.bili-search-mask-active.bili-search-page-results .search-input-wrap {
   position: static !important;
   transform: none !important;
   width: auto !important;
@@ -56,12 +60,20 @@ html.bili-search-mask-active .search-logo {
 
 /* 遮罩层样式（由 JS 插入） */
 #bili-header-mask-left {
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: none;
+  width: 240px;
+  height: 64px;
+  z-index: 999998;
   pointer-events: auto;
   background: #fff;
-  transition: opacity 0.2s ease-in-out; /* 平滑隐藏效果 */
+  opacity: 0;
+  transition: opacity 120ms ease;
 }
 
 /* 搜索结果页隐藏 logo，避免遮罩重叠 */
-html.bili-search-mask-active.is-results .search-logo {
+html.bili-search-mask-active.bili-search-page-results .search-logo {
   display: none !important;
 }

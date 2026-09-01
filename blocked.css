@@ -1,0 +1,109 @@
+:root {
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #090c16;
+  color: #f7f9ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background:
+    radial-gradient(circle at top left, rgba(255, 116, 154, 0.16), transparent 36%),
+    radial-gradient(circle at top right, rgba(137, 179, 255, 0.12), transparent 28%),
+    linear-gradient(180deg, #090c16, #0f1320);
+}
+
+.blocked-shell {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.blocked-card {
+  width: min(100%, 580px);
+  padding: 32px 28px 26px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 28px;
+  background: rgba(23, 30, 46, 0.94);
+  box-shadow: 0 30px 100px rgba(0, 0, 0, 0.42);
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  color: #ff8eb0;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+h1 {
+  margin: 0;
+  font-size: clamp(28px, 6vw, 38px);
+  line-height: 1.14;
+}
+
+.subtitle {
+  margin: 14px 0 0;
+  color: rgba(237, 242, 255, 0.8);
+  font-size: 15px;
+  line-height: 1.7;
+}
+
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.status-item {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.status-item span {
+  display: block;
+  margin-bottom: 8px;
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 12px;
+}
+
+.status-item strong {
+  overflow-wrap: anywhere;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.mode-note {
+  margin: 12px 0 0;
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(255, 114, 153, 0.14), rgba(119, 149, 255, 0.08));
+  color: rgba(247, 249, 255, 0.84);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.error-message {
+  min-height: 1.4em;
+  margin: 14px 0 0;
+  color: #ffb4c9;
+  font-size: 13px;
+}
+
+@media (max-width: 520px) {
+  .status-grid {
+    grid-template-columns: 1fr;
+  }
+}

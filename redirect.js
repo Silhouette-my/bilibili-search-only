@@ -1,53 +1,10 @@
-const BF_REDIRECT_TARGET_URL = 'https://search.bilibili.com/all?vt=64450376';
-const BF_REDIRECT_WHITELIST_HOSTS = [
-  'search.bilibili.com',
-  'passport.bilibili.com',
-  'message.bilibili.com',
-  'account.bilibili.com',
-  'space.bilibili.com',
-  'live.bilibili.com',
-  'api.bilibili.com',
-  'api.vc.bilibili.com',
-  'pay.bilibili.com',
-  't.bilibili.com'
-];
+const backgroundClient = globalThis.BiliFocusClient;
 
-let bfRedirectEnabled = true;
 let bfHeartbeatTimer = null;
 let bfHeartbeatActive = false;
 
-function bfIsRedirectCandidate() {
-  const host = window.location.hostname;
-  const pathname = window.location.pathname;
-
-  if (BF_REDIRECT_WHITELIST_HOSTS.includes(host)) return false;
-  if (
-    pathname.startsWith('/video/') ||
-    pathname.startsWith('/bangumi/play/') ||
-    pathname.startsWith('/bangumi/media/') ||
-    pathname.startsWith('/list/') ||
-    pathname.startsWith('/medialist/')
-  ) return false;
-  if (window.location.href === BF_REDIRECT_TARGET_URL) return false;
-
-  return true;
-}
-
-function bfApplyRedirectState(enabled) {
-  bfRedirectEnabled = enabled !== false;
-
-  if (bfRedirectEnabled && bfIsRedirectCandidate()) {
-    window.location.replace(BF_REDIRECT_TARGET_URL);
-  }
-}
-
-function bfHandleEffectiveFeatureState(featureState) {
-  const redirectEnabled = !featureState || featureState.redirectEnabled !== false;
-  bfApplyRedirectState(redirectEnabled);
-}
-
-function bfSendActivityPing() {
-  chrome.runtime.sendMessage({ type: 'BF_ACTIVITY_PING' }).catch(() => null);
+function bfSendActivityPing(final = false) {
+  backgroundClient.activityPing(final).catch(() => null);
 }
 
 function bfStopHeartbeat() {
@@ -80,26 +37,24 @@ function bfSyncHeartbeat() {
 }
 
 async function bfLoadRuntimeState() {
-  await chrome.runtime.sendMessage({ type: 'BF_ENSURE_RUNTIME' }).catch(() => null);
-  const { effectiveFeatureState } = await chrome.storage.local.get(['effectiveFeatureState']);
-  bfHandleEffectiveFeatureState(effectiveFeatureState || {});
+  await backgroundClient.ensureRuntime();
 }
-
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName === 'local' && changes.effectiveFeatureState) {
-    bfHandleEffectiveFeatureState(changes.effectiveFeatureState.newValue || {});
-  }
-});
 
 document.addEventListener('visibilitychange', bfSyncHeartbeat);
 window.addEventListener('focus', bfSyncHeartbeat);
 window.addEventListener('blur', bfSyncHeartbeat);
 window.addEventListener('pagehide', () => {
   if (bfHeartbeatActive) {
-    bfSendActivityPing();
+    bfSendActivityPing(true);
     bfStopHeartbeat();
   }
 });
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) {
+    bfLoadRuntimeState().catch(() => null);
+  }
+  bfSyncHeartbeat();
+});
 
-bfLoadRuntimeState();
+bfLoadRuntimeState().catch(() => null);
 bfSyncHeartbeat();
